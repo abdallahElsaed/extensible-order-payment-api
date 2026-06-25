@@ -10,15 +10,20 @@ beforeEach(function () {
     $this->user = User::factory()->create();
 });
 
-it('updates customer details', function () {
-    $order = Order::factory()->for($this->user)->create();
+it('ignores customer details sent in the request', function () {
+    $order = Order::factory()->for($this->user)->create([
+        'customer_name' => $this->user->name,
+        'customer_email' => $this->user->email,
+    ]);
 
     $response = $this->actingAs($this->user, 'api')->patchJson("/api/orders/{$order->id}", [
         'customer_name' => 'Updated Name',
+        'customer_email' => 'updated@example.com',
     ]);
 
-    $response->assertOk()->assertJson(['data' => ['customer_name' => 'Updated Name']]);
-    expect($order->fresh()->customer_name)->toBe('Updated Name');
+    $response->assertOk()->assertJson(['data' => ['customer_name' => $this->user->name]]);
+    expect($order->fresh()->customer_name)->toBe($this->user->name);
+    expect($order->fresh()->customer_email)->toBe($this->user->email);
 });
 
 it('recalculates the total when items change', function () {

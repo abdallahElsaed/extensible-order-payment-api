@@ -22,8 +22,6 @@ class UpdateOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_name' => ['sometimes', 'string', 'max:255'],
-            'customer_email' => ['sometimes', 'string', 'email', 'max:255'],
             'status' => ['sometimes', Rule::enum(OrderStatus::class)],
             'items' => ['sometimes', 'array', 'min:1'],
             'items.*.product_name' => ['required_with:items', 'string', 'max:255'],

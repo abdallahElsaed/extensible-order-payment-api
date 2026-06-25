@@ -55,11 +55,6 @@ class OrderService
         }
 
         return DB::transaction(function () use ($order, $data): Order {
-            $order->fill(array_filter([
-                'customer_name' => $data->customerName,
-                'customer_email' => $data->customerEmail,
-            ], fn ($value) => $value !== null));
-
             if ($data->status !== null) {
                 $order->status = $data->status;
             }
