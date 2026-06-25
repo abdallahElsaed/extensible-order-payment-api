@@ -36,8 +36,8 @@ class OrderService
     {
         return DB::transaction(function () use ($user, $data): Order {
             $order = $user->orders()->create([
-                'customer_name' => $data->customerName,
-                'customer_email' => $data->customerEmail,
+                'customer_name' => $user->name,
+                'customer_email' => $user->email,
                 'status' => OrderStatus::Pending,
                 'total' => $this->sumItems($data->items)->minorUnits(),
             ]);

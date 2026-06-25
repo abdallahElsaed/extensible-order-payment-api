@@ -1,58 +1,128 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Extensible Order & Payment Management API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel JSON API for managing customer orders and processing payments through
+pluggable, simulated payment gateways. Authentication uses JWT; money is stored
+as integer minor units to avoid floating-point drift; and new payment gateways
+can be added without modifying any existing gateway or the core payment flow.
 
-## About Laravel
+- **PHP** 8.4, **Laravel** 12
+- **Auth**: `php-open-source-saver/jwt-auth` via the `api` guard
+- **Tests**: Pest (feature + unit)
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Requirements
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- PHP 8.4 (Laravel Herd recommended)
+- Composer
+- MySQL with a database named `order_payment_api`
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Setup
 
 ```bash
-composer require laravel/boost --dev
+composer install
+cp .env.example .env          # then set DB_DATABASE=order_payment_api
+php artisan key:generate
 
-php artisan boost:install
+# JWT
+php artisan vendor:publish --provider="PHPOpenSourceSaver\JWTAuth\Providers\LaravelServiceProvider"
+php artisan jwt:secret        # writes JWT_SECRET to .env
+
+php artisan migrate
+php artisan db:seed --class=DemoSeeder   # optional demo data (demo@example.com / password)
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Served by Herd at `http://extensible-order-payment-api.test`. All endpoints are
+prefixed with `/api`.
 
-## Contributing
+## Running tests
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+php artisan test --compact                  # full suite
+php artisan test --compact --filter=Payment # one story
+vendor/bin/pint --format agent              # code style
+```
 
-## Code of Conduct
+## Response envelope
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Every response is wrapped in a consistent envelope:
 
-## Security Vulnerabilities
+```json
+{ "success": true, "message": "...", "data": {}, "errors": {} }
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- `2xx` → `success: true`, payload in `data`.
+- `422` validation → `success: false`, field errors in `errors`.
+- `401` / `404` / `409` → `success: false` with a `message`.
 
-## License
+Money fields (`total`, `unit_price`) are returned as decimal strings/numbers but
+stored internally as integer minor units.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Endpoints
+
+Authenticated routes require an `Authorization: Bearer <token>` header.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/api/auth/register` | no | Register, returns `{ user, token }` |
+| POST | `/api/auth/login` | no | Login, returns `{ user, token }` |
+| GET | `/api/user` | yes | Current user |
+| GET | `/api/orders` | yes | List own orders (`?status=`, paginated) |
+| POST | `/api/orders` | yes | Create an order with line items |
+| GET | `/api/orders/{order}` | yes | Show an order |
+| PATCH | `/api/orders/{order}` | yes | Update details/items/status |
+| DELETE | `/api/orders/{order}` | yes | Delete (blocked if payments exist) |
+| POST | `/api/orders/{order}/payments` | yes | Process a payment on a confirmed order |
+| GET | `/api/orders/{order}/payments` | yes | List payments for an order |
+| GET | `/api/payments` | yes | List all own payments (paginated) |
+| GET | `/api/payments/{payment}` | yes | Show a payment by UUID |
+
+### Core flow (happy path)
+
+1. `POST /api/auth/register` → grab the `token`.
+2. `POST /api/orders` with `items` → order created `pending`, `total` auto-summed.
+3. `PATCH /api/orders/{id}` `{ "status": "confirmed" }`.
+4. `POST /api/orders/{id}/payments` `{ "method": "credit_card" }` → payment recorded
+   with the simulated outcome.
+5. `GET /api/payments` → your paginated payments.
+
+Status transitions are enforced (`pending → confirmed → cancelled`); invalid
+transitions and deleting an order that has payments return `409`.
+
+## Adding a new payment gateway
+
+`PaymentGatewayRegistry` resolves gateways by convention, not configuration. For a
+`PaymentMethod` case named `Foo`, it resolves the class
+`App\Services\Payment\Gateways\FooGateway` from the container. So registering a new
+gateway needs no config edits and no changes to any existing gateway, the registry,
+or the payment flow — just two additions:
+
+1. **Add the enum case** in `app/Enums/Payment/PaymentMethod.php`. The case name
+   determines the gateway class name; the value is the API-facing method string:
+
+   ```php
+   case Stripe = 'stripe';
+   ```
+
+2. **Create the matching gateway class** implementing the contract. The name must
+   follow the convention (`{CaseName}Gateway`) so the registry can find it:
+
+   ```php
+   // app/Services/Payment/Gateways/StripeGateway.php
+   final class StripeGateway implements PaymentGatewayContract
+   {
+       public function process(ProcessPaymentData $data): GatewayResult
+       {
+           // ... return new GatewayResult(status, reference, message)
+       }
+   }
+   ```
+
+That is the whole change. `Rule::enum(PaymentMethod::class)` validation and the
+registry pick up the new method automatically; a method without a matching gateway
+class yields a `422`. If the gateway calls a real provider, read its credentials
+from the `credentials` block in `config/payments.php` (sourced from env).
+
+## Postman
+
+An importable collection lives at `docs/postman_collection.json`, organized into
+Authentication / Orders / Payments with success and error examples. Set the
+`base_url` and `token` collection variables after importing.

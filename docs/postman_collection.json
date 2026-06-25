@@ -1,0 +1,333 @@
+{
+  "info": {
+    "name": "Extensible Order & Payment Management API",
+    "description": "JWT-authenticated API for orders and payments. Import, then set the `base_url` and `token` collection variables. Register or login first to obtain a token.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://extensible-order-payment-api.test/api" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/register", "host": ["{{base_url}}"], "path": ["auth", "register"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Ada Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"password\": \"password\",\n  \"password_confirmation\": \"password\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Registered.\",\n  \"data\": {\n    \"user\": { \"id\": 1, \"name\": \"Ada Lovelace\", \"email\": \"ada@example.com\" },\n    \"token\": \"<jwt>\",\n    \"token_type\": \"bearer\",\n    \"expires_in\": 3600\n  },\n  \"errors\": {}\n}"
+            },
+            {
+              "name": "422 Validation (duplicate email)",
+              "code": 422,
+              "status": "Unprocessable Content",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The email has already been taken.\",\n  \"data\": null,\n  \"errors\": { \"email\": [\"The email has already been taken.\"] }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": { "raw": "{{base_url}}/auth/login", "host": ["{{base_url}}"], "path": ["auth", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"password\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Authenticated.\",\n  \"data\": {\n    \"user\": { \"id\": 1, \"name\": \"Ada Lovelace\", \"email\": \"ada@example.com\" },\n    \"token\": \"<jwt>\",\n    \"token_type\": \"bearer\",\n    \"expires_in\": 3600\n  },\n  \"errors\": {}\n}"
+            },
+            {
+              "name": "401 Invalid credentials",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Invalid credentials.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders?status=pending",
+              "host": ["{{base_url}}"],
+              "path": ["orders"],
+              "query": [{ "key": "status", "value": "pending" }]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Orders retrieved.\",\n  \"data\": [\n    { \"id\": 1, \"customer_name\": \"Ada Lovelace\", \"status\": \"pending\", \"total\": 125.00 }\n  ],\n  \"meta\": { \"current_page\": 1, \"per_page\": 15, \"total\": 1 }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/orders", "host": ["{{base_url}}"], "path": ["orders"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"product_name\": \"Keyboard\", \"quantity\": 1, \"unit_price\": 75.00 },\n    { \"product_name\": \"Mouse\", \"quantity\": 2, \"unit_price\": 25.00 }\n  ]\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Order created.\",\n  \"data\": {\n    \"id\": 1,\n    \"customer_name\": \"Ada Lovelace\",\n    \"status\": \"pending\",\n    \"total\": 125.00,\n    \"items\": [\n      { \"product_name\": \"Keyboard\", \"quantity\": 1, \"unit_price\": 75.00, \"line_total\": 75.00 },\n      { \"product_name\": \"Mouse\", \"quantity\": 2, \"unit_price\": 25.00, \"line_total\": 50.00 }\n    ]\n  },\n  \"errors\": {}\n}"
+            },
+            {
+              "name": "422 Validation (no items)",
+              "code": 422,
+              "status": "Unprocessable Content",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The items field is required.\",\n  \"data\": null,\n  \"errors\": { \"items\": [\"The items field is required.\"] }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Show Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/orders/1", "host": ["{{base_url}}"], "path": ["orders", "1"] }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Resource not found.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Order (status / items)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/orders/1", "host": ["{{base_url}}"], "path": ["orders", "1"] },
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"confirmed\"\n}" }
+          },
+          "response": [
+            {
+              "name": "409 Invalid transition",
+              "code": 409,
+              "status": "Conflict",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot transition order from cancelled to confirmed.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Order",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/orders/1", "host": ["{{base_url}}"], "path": ["orders", "1"] }
+          },
+          "response": [
+            {
+              "name": "409 Order has payments",
+              "code": 409,
+              "status": "Conflict",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Cannot delete an order that has payments.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Payments",
+      "item": [
+        {
+          "name": "Process Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders/1/payments",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "1", "payments"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"method\": \"credit_card\"\n}" }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payment processed.\",\n  \"data\": {\n    \"id\": \"9b1f...uuid\",\n    \"order_id\": 1,\n    \"method\": \"credit_card\",\n    \"status\": \"successful\",\n    \"reference\": \"cc_...\",\n    \"message\": \"Credit card payment approved.\"\n  },\n  \"errors\": {}\n}"
+            },
+            {
+              "name": "409 Order not confirmed",
+              "code": 409,
+              "status": "Conflict",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The order must be confirmed before it can be paid.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            },
+            {
+              "name": "422 Unsupported method",
+              "code": 422,
+              "status": "Unprocessable Content",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"The selected method is invalid.\",\n  \"data\": null,\n  \"errors\": { \"method\": [\"The selected method is invalid.\"] }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Payments for Order",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/orders/1/payments",
+              "host": ["{{base_url}}"],
+              "path": ["orders", "1", "payments"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payments retrieved.\",\n  \"data\": [\n    { \"id\": \"9b1f...uuid\", \"order_id\": 1, \"method\": \"credit_card\", \"status\": \"successful\" }\n  ],\n  \"meta\": { \"current_page\": 1, \"per_page\": 15, \"total\": 1 }\n}"
+            }
+          ]
+        },
+        {
+          "name": "List All Payments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": { "raw": "{{base_url}}/payments", "host": ["{{base_url}}"], "path": ["payments"] }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": true,\n  \"message\": \"Payments retrieved.\",\n  \"data\": [],\n  \"meta\": { \"current_page\": 1, \"per_page\": 15, \"total\": 0 }\n}"
+            }
+          ]
+        },
+        {
+          "name": "Show Payment",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/payments/9b1f-uuid",
+              "host": ["{{base_url}}"],
+              "path": ["payments", "9b1f-uuid"]
+            }
+          },
+          "response": [
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "_postman_previewlanguage": "json",
+              "body": "{\n  \"success\": false,\n  \"message\": \"Resource not found.\",\n  \"data\": null,\n  \"errors\": {}\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

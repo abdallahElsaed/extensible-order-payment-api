@@ -7,13 +7,14 @@ use App\Models\Order;
 use App\Models\User;
 
 beforeEach(function () {
-    $this->user = User::factory()->create();
+    $this->user = User::factory()->create([
+        'name' => 'Jane Doe',
+        'email' => 'jane@example.com',
+    ]);
 });
 
 it('creates an order and auto-sums the total', function () {
     $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [
             ['product_name' => 'Widget', 'quantity' => 3, 'unit_price' => 19.99],
             ['product_name' => 'Gadget', 'quantity' => 2, 'unit_price' => 5.00],
@@ -25,6 +26,7 @@ it('creates an order and auto-sums the total', function () {
             'success' => true,
             'data' => [
                 'customer_name' => 'Jane Doe',
+                'customer_email' => 'jane@example.com',
                 'status' => OrderStatus::Pending->value,
                 'total' => '69.97',
             ],
@@ -41,8 +43,6 @@ it('creates an order and auto-sums the total', function () {
 
 it('defaults the status to pending', function () {
     $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [
             ['product_name' => 'Widget', 'quantity' => 1, 'unit_price' => 10.00],
         ],
@@ -54,8 +54,6 @@ it('defaults the status to pending', function () {
 
 it('rejects an order with no items', function () {
     $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [],
     ]);
 
@@ -64,8 +62,6 @@ it('rejects an order with no items', function () {
 
 it('rejects zero or negative quantities', function (int $quantity) {
     $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [
             ['product_name' => 'Widget', 'quantity' => $quantity, 'unit_price' => 10.00],
         ],
@@ -76,8 +72,6 @@ it('rejects zero or negative quantities', function (int $quantity) {
 
 it('rejects a negative unit price', function () {
     $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [
             ['product_name' => 'Widget', 'quantity' => 1, 'unit_price' => -5.00],
         ],
@@ -88,8 +82,6 @@ it('rejects a negative unit price', function () {
 
 it('requires authentication', function () {
     $response = $this->postJson('/api/orders', [
-        'customer_name' => 'Jane Doe',
-        'customer_email' => 'jane@example.com',
         'items' => [
             ['product_name' => 'Widget', 'quantity' => 1, 'unit_price' => 10.00],
         ],
