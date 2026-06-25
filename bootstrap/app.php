@@ -2,6 +2,8 @@
 
 use App\Exceptions\Order\InvalidStatusTransitionException;
 use App\Exceptions\Order\OrderHasPaymentsException;
+use App\Exceptions\Payment\OrderNotConfirmedException;
+use App\Exceptions\Payment\UnsupportedPaymentMethodException;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -46,5 +48,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (OrderHasPaymentsException|InvalidStatusTransitionException $e) => ApiResponse::error(
             message: $e->getMessage(),
             status: 409,
+        ));
+
+        $exceptions->render(fn (OrderNotConfirmedException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            status: 409,
+        ));
+
+        $exceptions->render(fn (UnsupportedPaymentMethodException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            errors: ['method' => [$e->getMessage()]],
+            status: 422,
         ));
     })->create();
