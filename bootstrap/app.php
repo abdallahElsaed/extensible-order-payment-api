@@ -1,5 +1,7 @@
 <?php
 
+use App\Exceptions\Order\InvalidStatusTransitionException;
+use App\Exceptions\Order\OrderHasPaymentsException;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -39,5 +41,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (ModelNotFoundException|NotFoundHttpException $e) => ApiResponse::error(
             message: 'Resource not found.',
             status: 404,
+        ));
+
+        $exceptions->render(fn (OrderHasPaymentsException|InvalidStatusTransitionException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            status: 409,
         ));
     })->create();

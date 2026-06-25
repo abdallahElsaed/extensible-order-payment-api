@@ -22,6 +22,24 @@ final class ApiResponse
     }
 
     /**
+     * @param  array{data?: mixed, links?: mixed, meta?: mixed}  $paginated
+     */
+    public static function paginated(
+        array $paginated,
+        string $message = 'OK',
+        int $status = 200,
+    ): JsonResponse {
+        return response()->json([
+            'success' => true,
+            'message' => $message,
+            'data' => $paginated['data'] ?? [],
+            'links' => $paginated['links'] ?? null,
+            'meta' => $paginated['meta'] ?? null,
+            'errors' => null,
+        ], $status);
+    }
+
+    /**
      * @param  array<string, mixed>|null  $errors
      */
     public static function error(
