@@ -25,8 +25,8 @@ class UpdateOrderRequest extends FormRequest
             'status' => ['sometimes', Rule::enum(OrderStatus::class)],
             'items' => ['sometimes', 'array', 'min:1'],
             'items.*.product_name' => ['required_with:items', 'string', 'max:255'],
-            'items.*.quantity' => ['required_with:items', 'integer', 'min:1'],
-            'items.*.unit_price' => ['required_with:items', 'numeric', 'min:0'],
+            'items.*.quantity' => ['required_with:items', 'integer', 'min:1', 'max:100000'],
+            'items.*.unit_price' => ['required_with:items', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
         ];
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Enums\Order\OrderStatus;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\User;
 
 beforeEach(function () {
@@ -59,5 +60,32 @@ it('rejects an invalid status transition with 409', function () {
     ]);
 
     $response->assertStatus(409)->assertJson(['success' => false]);
+    expect($order->fresh()->status)->toBe(OrderStatus::Cancelled);
+});
+
+it('refuses to modify items once the order has payments', function () {
+    $order = Order::factory()->for($this->user)->confirmed()->create(['total' => 5000]);
+    Payment::factory()->for($order)->create();
+
+    $response = $this->actingAs($this->user, 'api')->patchJson("/api/orders/{$order->id}", [
+        'items' => [
+            ['product_name' => 'Tampered', 'quantity' => 9, 'unit_price' => 99.00],
+        ],
+    ]);
+
+    $response->assertStatus(409)->assertJson(['success' => false]);
+    expect($order->fresh()->total)->toBe(5000);
+    expect($order->fresh()->items)->toHaveCount(0);
+});
+
+it('still allows a status-only change when the order has payments', function () {
+    $order = Order::factory()->for($this->user)->confirmed()->create();
+    Payment::factory()->for($order)->create();
+
+    $response = $this->actingAs($this->user, 'api')->patchJson("/api/orders/{$order->id}", [
+        'status' => OrderStatus::Cancelled->value,
+    ]);
+
+    $response->assertOk()->assertJson(['data' => ['status' => OrderStatus::Cancelled->value]]);
     expect($order->fresh()->status)->toBe(OrderStatus::Cancelled);
 });

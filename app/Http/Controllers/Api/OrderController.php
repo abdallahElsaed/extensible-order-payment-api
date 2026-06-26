@@ -8,6 +8,7 @@ use App\DTOs\Order\CreateOrderData;
 use App\DTOs\Order\UpdateOrderData;
 use App\Enums\Order\OrderStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Order\IndexOrderRequest;
 use App\Http\Requests\Order\StoreOrderRequest;
 use App\Http\Requests\Order\UpdateOrderRequest;
 use App\Http\Resources\OrderResource;
@@ -20,15 +21,14 @@ class OrderController extends Controller
 {
     public function __construct(private readonly OrderService $orders) {}
 
-    public function index(Request $request): JsonResponse
+    public function index(IndexOrderRequest $request): JsonResponse
     {
-        $status = $request->query('status');
-        $perPage = min((int) $request->integer('per_page', 15) ?: 15, 100);
+        $status = $request->validated('status');
 
         $orders = $this->orders->paginateForUser(
             user: $request->user(),
-            status: $status !== null ? OrderStatus::tryFrom((string) $status) : null,
-            perPage: $perPage,
+            status: $status !== null ? OrderStatus::from($status) : null,
+            perPage: (int) $request->validated('per_page', 15),
         );
 
         return ApiResponse::paginated(

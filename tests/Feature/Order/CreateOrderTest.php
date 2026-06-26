@@ -80,6 +80,36 @@ it('rejects a negative unit price', function () {
     $response->assertStatus(422)->assertJsonValidationErrors('items.0.unit_price');
 });
 
+it('rejects a unit price with more than two decimals', function () {
+    $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
+        'items' => [
+            ['product_name' => 'Widget', 'quantity' => 1, 'unit_price' => 19.999],
+        ],
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors('items.0.unit_price');
+});
+
+it('rejects a unit price above the maximum', function () {
+    $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
+        'items' => [
+            ['product_name' => 'Widget', 'quantity' => 1, 'unit_price' => 10000000],
+        ],
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors('items.0.unit_price');
+});
+
+it('rejects a quantity above the maximum', function () {
+    $response = $this->actingAs($this->user, 'api')->postJson('/api/orders', [
+        'items' => [
+            ['product_name' => 'Widget', 'quantity' => 100001, 'unit_price' => 10.00],
+        ],
+    ]);
+
+    $response->assertStatus(422)->assertJsonValidationErrors('items.0.quantity');
+});
+
 it('requires authentication', function () {
     $response = $this->postJson('/api/orders', [
         'items' => [

@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Order;
 
+use App\Enums\Order\OrderStatus;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
-class StoreOrderRequest extends FormRequest
+class IndexOrderRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -20,10 +22,8 @@ class StoreOrderRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.product_name' => ['required', 'string', 'max:255'],
-            'items.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
-            'items.*.unit_price' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:9999999.99'],
+            'status' => ['sometimes', Rule::enum(OrderStatus::class)],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

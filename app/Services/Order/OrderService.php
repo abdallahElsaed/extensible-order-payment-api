@@ -54,6 +54,10 @@ class OrderService
             throw new InvalidStatusTransitionException($order->status, $data->status);
         }
 
+        if ($data->items !== null && $order->payments()->exists()) {
+            throw new OrderHasPaymentsException('Order has associated payments; items and total cannot be modified.');
+        }
+
         return DB::transaction(function () use ($order, $data): Order {
             if ($data->status !== null) {
                 $order->status = $data->status;

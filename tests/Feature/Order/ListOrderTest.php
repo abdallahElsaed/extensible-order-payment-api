@@ -46,6 +46,20 @@ it('returns an empty page when paging beyond range with valid meta', function ()
     expect($response->json('meta.current_page'))->toBe(99);
 });
 
+it('rejects an invalid status filter with 422', function () {
+    $this->actingAs($this->user, 'api')
+        ->getJson('/api/orders?status=garbage')
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('status');
+});
+
+it('rejects an out-of-range per_page with 422', function (int $perPage) {
+    $this->actingAs($this->user, 'api')
+        ->getJson("/api/orders?per_page={$perPage}")
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('per_page');
+})->with([0, -5, 200]);
+
 it('requires authentication to list orders', function () {
     $this->getJson('/api/orders')->assertStatus(401);
 });

@@ -22,10 +22,7 @@ final readonly class Money
 
     public static function fromDecimal(string|float $amount): self
     {
-        $normalized = number_format((float) $amount, 2, '.', '');
-        [$whole, $fraction] = explode('.', $normalized);
-
-        return new self(((int) $whole * 100) + (int) $fraction);
+        return new self((int) round((float) $amount * 100));
     }
 
     public function add(self $other): self

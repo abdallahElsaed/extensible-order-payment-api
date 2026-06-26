@@ -58,3 +58,7 @@ it('formats money with thousands separators', function (): void {
 it('rejects negative amounts', function (): void {
     Money::fromMinor(-1);
 })->throws(InvalidArgumentException::class);
+
+it('rejects a negative decimal amount', function (): void {
+    Money::fromDecimal('-0.50');
+})->throws(InvalidArgumentException::class);
