@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api;
 
 use App\Enums\Payment\PaymentMethod;
+use App\Enums\Payment\PaymentStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Payment\IndexPaymentRequest;
 use App\Http\Requests\Payment\ProcessPaymentRequest;
 use App\Http\Resources\PaymentResource;
 use App\Http\Responses\ApiResponse;
@@ -30,30 +32,32 @@ class PaymentController extends Controller
             method: PaymentMethod::from($request->validated('method')),
         );
 
+        $failed = $payment->status === PaymentStatus::Failed;
+
         return ApiResponse::success(
             data: new PaymentResource($payment),
-            message: 'Payment processed.',
-            status: 201,
+            message: $failed ? 'Payment failed.' : 'Payment processed.',
+            status: $failed ? 402 : 201,
         );
     }
 
-    public function indexForOrder(Request $request, int $order): JsonResponse
+    public function indexForOrder(IndexPaymentRequest $request, int $order): JsonResponse
     {
         $model = $this->orders->findForUser($request->user(), $order);
 
         return ApiResponse::paginated(
             paginated: PaymentResource::collection(
-                $this->payments->paginateForOrder($model, $this->perPage($request)),
+                $this->payments->paginateForOrder($model, (int) $request->validated('per_page', 15)),
             )->response()->getData(true),
             message: 'Payments retrieved.',
         );
     }
 
-    public function index(Request $request): JsonResponse
+    public function index(IndexPaymentRequest $request): JsonResponse
     {
         return ApiResponse::paginated(
             paginated: PaymentResource::collection(
-                $this->payments->paginateForUser($request->user(), $this->perPage($request)),
+                $this->payments->paginateForUser($request->user(), (int) $request->validated('per_page', 15)),
             )->response()->getData(true),
             message: 'Payments retrieved.',
         );
@@ -65,10 +69,5 @@ class PaymentController extends Controller
             data: new PaymentResource($this->payments->findForUser($request->user(), $payment)),
             message: 'Payment retrieved.',
         );
-    }
-
-    private function perPage(Request $request): int
-    {
-        return min((int) $request->integer('per_page', 15) ?: 15, 100);
     }
 }

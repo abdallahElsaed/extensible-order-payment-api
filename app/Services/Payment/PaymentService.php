@@ -7,11 +7,14 @@ namespace App\Services\Payment;
 use App\DTOs\Payment\ProcessPaymentData;
 use App\Enums\Order\OrderStatus;
 use App\Enums\Payment\PaymentMethod;
+use App\Enums\Payment\PaymentStatus;
+use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 
 final class PaymentService
 {
@@ -19,20 +22,28 @@ final class PaymentService
 
     public function process(Order $order, PaymentMethod $method): Payment
     {
-        if ($order->status !== OrderStatus::Confirmed) {
-            throw new OrderNotConfirmedException;
-        }
+        return DB::transaction(function () use ($order, $method): Payment {
+            $order = Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
 
-        $gateway = $this->registry->resolve($method);
+            if ($order->status !== OrderStatus::Confirmed) {
+                throw new OrderNotConfirmedException;
+            }
 
-        $result = $gateway->process(new ProcessPaymentData($order, $method));
+            if ($order->payments()->where('status', PaymentStatus::Successful)->exists()) {
+                throw new OrderAlreadyPaidException;
+            }
 
-        return $order->payments()->create([
-            'method' => $method,
-            'status' => $result->status,
-            'reference' => $result->reference,
-            'message' => $result->message,
-        ]);
+            $gateway = $this->registry->resolve($method);
+
+            $result = $gateway->process(new ProcessPaymentData($order, $method));
+
+            return $order->payments()->create([
+                'method' => $method,
+                'status' => $result->status,
+                'reference' => $result->reference,
+                'message' => $result->message,
+            ]);
+        });
     }
 
     public function paginateForOrder(Order $order, int $perPage): LengthAwarePaginator

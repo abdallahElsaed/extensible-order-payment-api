@@ -37,8 +37,32 @@ it('records a failed payment when the gateway is configured to fail', function (
     $response = $this->actingAs($this->user, 'api')
         ->postJson("/api/orders/{$order->id}/payments", ['method' => 'credit_card']);
 
-    $response->assertStatus(201)
+    $response->assertStatus(402)
         ->assertJson(['data' => ['status' => 'failed']]);
+});
+
+it('rejects a second payment on an already-paid order with 409', function () {
+    $order = Order::factory()->for($this->user)->confirmed()->create();
+    Payment::factory()->for($order)->successful()->create();
+
+    $response = $this->actingAs($this->user, 'api')
+        ->postJson("/api/orders/{$order->id}/payments", ['method' => 'credit_card']);
+
+    $response->assertStatus(409)->assertJson(['success' => false]);
+    expect(Payment::where('order_id', $order->id)->count())->toBe(1);
+});
+
+it('allows a retry after a failed payment', function () {
+    config(['payments.simulation.credit_card.outcome' => 'successful']);
+    $order = Order::factory()->for($this->user)->confirmed()->create();
+    Payment::factory()->for($order)->failed()->create();
+
+    $response = $this->actingAs($this->user, 'api')
+        ->postJson("/api/orders/{$order->id}/payments", ['method' => 'credit_card']);
+
+    $response->assertStatus(201)
+        ->assertJson(['data' => ['status' => 'successful']]);
+    expect(Payment::where('order_id', $order->id)->count())->toBe(2);
 });
 
 it('rejects a payment on a pending order with 409', function () {
