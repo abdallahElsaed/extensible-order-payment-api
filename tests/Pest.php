@@ -1,5 +1,9 @@
 <?php
 
+use App\Enums\Payment\PaymentMethod;
+use App\Services\Payment\PaymentGatewayRegistry;
+use Illuminate\Contracts\Foundation\Application;
+use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -20,6 +24,11 @@ pest()->extend(TestCase::class)
 
 pest()->extend(TestCase::class)
     ->in('Unit');
+
+// Racing processes must see each other's commits, so no wrapping transaction here.
+pest()->extend(TestCase::class)
+    ->use(DatabaseTruncation::class)
+    ->in('Concurrency');
 
 /*
 |--------------------------------------------------------------------------
@@ -50,4 +59,17 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Route credit card payments to a test gateway.
+ */
+function useCreditCardGateway(string $gateway): void
+{
+    app()->singleton(
+        PaymentGatewayRegistry::class,
+        fn (Application $app): PaymentGatewayRegistry => new PaymentGatewayRegistry($app, [
+            PaymentMethod::CreditCard->value => $gateway,
+        ]),
+    );
 }

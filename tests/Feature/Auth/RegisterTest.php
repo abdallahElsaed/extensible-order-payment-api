@@ -75,3 +75,18 @@ it('requires name, email and password', function () {
     $response->assertStatus(422)
         ->assertJsonValidationErrors(['name', 'email', 'password']);
 });
+
+it('limits registrations to ten a minute per IP with the API envelope', function () {
+    $register = fn (int $attempt) => $this->postJson('/api/auth/register', [
+        'name' => 'Jane',
+        'email' => "jane{$attempt}@example.com",
+        'password' => 'secret123',
+        'password_confirmation' => 'secret123',
+    ]);
+
+    foreach (range(1, 10) as $attempt) {
+        $register($attempt)->assertCreated();
+    }
+
+    $register(11)->assertStatus(429)->assertHeader('Retry-After')->assertJson(['success' => false]);
+});

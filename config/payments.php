@@ -25,6 +25,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Pending payment TTL
+    |--------------------------------------------------------------------------
+    |
+    | A payment still pending after this many minutes is treated as abandoned by
+    | payments:expire-stale. It must exceed the longest possible gateway call,
+    | otherwise a slow but live request can lose its result to the expiry.
+    |
+    */
+
+    'pending_ttl_minutes' => filter_var(env('PAYMENT_PENDING_TTL_MINUTES'), FILTER_VALIDATE_INT, [
+        'options' => ['default' => 15, 'min_range' => 1],
+    ]),
+
+    /*
+    |--------------------------------------------------------------------------
     | Gateway credentials
     |--------------------------------------------------------------------------
     |

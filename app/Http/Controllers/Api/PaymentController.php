@@ -30,14 +30,21 @@ class PaymentController extends Controller
         $payment = $this->payments->process(
             order: $model,
             method: PaymentMethod::from($request->validated('method')),
+            idempotency: $request->idempotency(),
         );
-
-        $failed = $payment->status === PaymentStatus::Failed;
 
         return ApiResponse::success(
             data: new PaymentResource($payment),
-            message: $failed ? 'Payment failed.' : 'Payment processed.',
-            status: $failed ? 402 : 201,
+            message: match ($payment->status) {
+                PaymentStatus::Successful => 'Payment processed.',
+                PaymentStatus::Failed => 'Payment failed.',
+                PaymentStatus::Pending => 'Payment outcome not confirmed yet.',
+            },
+            status: match ($payment->status) {
+                PaymentStatus::Successful => 201,
+                PaymentStatus::Failed => 402,
+                PaymentStatus::Pending => 202,
+            },
         );
     }
 

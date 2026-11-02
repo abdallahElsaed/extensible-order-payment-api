@@ -20,9 +20,25 @@ final readonly class Money
         return new self($minorUnits);
     }
 
+    /**
+     * Parses digits rather than casting to float, so precision is never lost.
+     * A third decimal place rounds half up.
+     */
     public static function fromDecimal(string|float $amount): self
     {
-        return new self((int) round((float) $amount * 100));
+        $decimal = is_float($amount) ? number_format($amount, 2, '.', '') : $amount;
+
+        if (preg_match('/^([+-]?)(?=\.?\d)(\d*)\.?(\d*)$/D', $decimal, $parts) !== 1) {
+            throw new InvalidArgumentException("Invalid decimal amount [{$decimal}].");
+        }
+
+        [, $sign, $whole, $fraction] = $parts;
+
+        $minorUnits = (int) $whole * 100
+            + (int) substr(str_pad($fraction, 2, '0'), 0, 2)
+            + ((int) ($fraction[2] ?? 0) >= 5 ? 1 : 0);
+
+        return new self($sign === '-' ? -$minorUnits : $minorUnits);
     }
 
     public function add(self $other): self
@@ -42,11 +58,13 @@ final readonly class Money
 
     public function toDecimal(): string
     {
-        return number_format($this->minorUnits / 100, 2, '.', '');
+        return sprintf('%d.%02d', intdiv($this->minorUnits, 100), $this->minorUnits % 100);
     }
 
     public function format(): string
     {
-        return number_format($this->minorUnits / 100, 2);
+        $whole = preg_replace('/\B(?=(\d{3})+$)/', ',', (string) intdiv($this->minorUnits, 100));
+
+        return sprintf('%s.%02d', $whole, $this->minorUnits % 100);
     }
 }

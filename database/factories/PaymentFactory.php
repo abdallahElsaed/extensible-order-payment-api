@@ -31,6 +31,11 @@ class PaymentFactory extends Factory
         ];
     }
 
+    public function pending(): static
+    {
+        return $this->state(fn (array $attributes) => ['status' => PaymentStatus::Pending, 'reference' => null]);
+    }
+
     public function successful(): static
     {
         return $this->state(fn (array $attributes) => ['status' => PaymentStatus::Successful]);

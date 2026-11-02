@@ -2,8 +2,11 @@
 
 use App\Exceptions\Order\InvalidStatusTransitionException;
 use App\Exceptions\Order\OrderHasPaymentsException;
+use App\Exceptions\Payment\IdempotencyKeyReusedException;
 use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
+use App\Exceptions\Payment\PaymentInProgressException;
+use App\Exceptions\Payment\PaymentOutcomeConflictException;
 use App\Exceptions\Payment\UnsupportedPaymentMethodException;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
@@ -11,6 +14,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -46,14 +50,25 @@ return Application::configure(basePath: dirname(__DIR__))
             status: 404,
         ));
 
+        $exceptions->render(fn (ThrottleRequestsException $e) => ApiResponse::error(
+            message: 'Too many attempts. Try again later.',
+            status: 429,
+        )->withHeaders($e->getHeaders()));
+
         $exceptions->render(fn (OrderHasPaymentsException|InvalidStatusTransitionException $e) => ApiResponse::error(
             message: $e->getMessage(),
             status: 409,
         ));
 
-        $exceptions->render(fn (OrderNotConfirmedException|OrderAlreadyPaidException $e) => ApiResponse::error(
+        $exceptions->render(fn (OrderNotConfirmedException|OrderAlreadyPaidException|PaymentInProgressException|PaymentOutcomeConflictException $e) => ApiResponse::error(
             message: $e->getMessage(),
             status: 409,
+        ));
+
+        $exceptions->render(fn (IdempotencyKeyReusedException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            errors: ['Idempotency-Key' => [$e->getMessage()]],
+            status: 422,
         ));
 
         $exceptions->render(fn (UnsupportedPaymentMethodException $e) => ApiResponse::error(

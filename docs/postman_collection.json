@@ -221,7 +221,8 @@
             "header": [
               { "key": "Accept", "value": "application/json" },
               { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{token}}" }
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}", "description": "Optional. Reuse the same value to retry safely.", "disabled": true }
             ],
             "url": {
               "raw": "{{base_url}}/orders/1/payments",

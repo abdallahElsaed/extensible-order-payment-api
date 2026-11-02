@@ -29,6 +29,15 @@ it('refuses to delete an order that has payments with 409', function () {
     expect(Order::find($order->id))->not->toBeNull();
 });
 
+it('refuses to delete an order while a payment is in flight', function () {
+    $order = Order::factory()->for($this->user)->confirmed()->create();
+    Payment::factory()->for($order)->pending()->create();
+
+    $this->actingAs($this->user, 'api')->deleteJson("/api/orders/{$order->id}")->assertStatus(409);
+
+    expect(Order::find($order->id))->not->toBeNull();
+});
+
 it('returns 404 when deleting a non-existent order', function () {
     $response = $this->actingAs($this->user, 'api')->deleteJson('/api/orders/999999');
 

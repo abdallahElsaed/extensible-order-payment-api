@@ -78,3 +78,50 @@ it('allows access to a protected route with a valid token', function () {
         ->assertSuccessful()
         ->assertJson(['id' => $user->id]);
 });
+
+it('throttles repeated login attempts for an email and IP with the API envelope', function () {
+    $user = User::factory()->create(['password' => 'secret123']);
+    $attempt = fn (string $password = 'wrong-password') => $this->postJson('/api/auth/login', [
+        'email' => $user->email,
+        'password' => $password,
+    ]);
+
+    foreach (range(1, 5) as $ignored) {
+        $attempt()->assertStatus(401);
+    }
+
+    $attempt('secret123')
+        ->assertStatus(429)
+        ->assertHeader('Retry-After')
+        ->assertJson(['success' => false, 'data' => null]);
+});
+
+it('counts an email in a different case towards the same limit', function () {
+    foreach (range(1, 5) as $ignored) {
+        $this->postJson('/api/auth/login', ['email' => 'jane@example.com', 'password' => 'x'])->assertStatus(401);
+    }
+
+    $this->postJson('/api/auth/login', ['email' => 'JANE@example.com', 'password' => 'x'])->assertStatus(429);
+});
+
+it('does not throttle a different email from the same IP', function () {
+    foreach (range(1, 5) as $ignored) {
+        $this->postJson('/api/auth/login', ['email' => 'jane@example.com', 'password' => 'x'])->assertStatus(401);
+    }
+
+    $this->postJson('/api/auth/login', ['email' => 'john@example.com', 'password' => 'x'])->assertStatus(401);
+});
+
+it('limits one IP trying many emails', function () {
+    foreach (range(1, 30) as $attempt) {
+        $this->postJson('/api/auth/login', ['email' => "user{$attempt}@example.com", 'password' => 'x'])->assertStatus(401);
+    }
+
+    $this->postJson('/api/auth/login', ['email' => 'another@example.com', 'password' => 'x'])->assertStatus(429);
+});
+
+it('answers 422 when the email is not a string, before the limiter can fail', function () {
+    $this->postJson('/api/auth/login', ['email' => ['jane@example.com'], 'password' => 'x'])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('email');
+});
