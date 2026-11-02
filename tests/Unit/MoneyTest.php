@@ -23,17 +23,12 @@ it('keeps every digit of a decimal string beyond float precision', function (): 
     expect(Money::fromDecimal('90071992547409.93')->minorUnits())->toBe(9007199254740993);
 });
 
-it('rounds a third decimal place half up from the digits, not a float', function (string $amount, int $minorUnits): void {
+it('parses a decimal string from its digits', function (string $amount, int $minorUnits): void {
     expect(Money::fromDecimal($amount)->minorUnits())->toBe($minorUnits);
 })->with([
     'half rounds up where a float would not' => ['1.005', 101],
     'below half rounds down' => ['1.004', 100],
-    'carries into the whole part' => ['0.995', 100],
-]);
-
-it('accepts every numeric shape the order validation lets through', function (string $amount, int $minorUnits): void {
-    expect(Money::fromDecimal($amount)->minorUnits())->toBe($minorUnits);
-})->with([
+    'rounding carries into the whole part' => ['0.995', 100],
     'explicit plus' => ['+5', 500],
     'leading dot' => ['.5', 50],
     'trailing dot' => ['5.', 500],

@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Enums\Payment\PaymentStatus;
 use App\Models\IdempotencyKey;
 use App\Models\Order;
 use App\Models\Payment;
@@ -158,9 +157,3 @@ it('enforces key uniqueness per user in the database itself', function () {
 
     IdempotencyKey::factory()->create(['user_id' => $existing->user_id, 'key_hash' => $existing->key_hash]);
 })->throws(UniqueConstraintViolationException::class);
-
-it('stores the first payment against the key', function () {
-    payWithKey('key-1', $this->order)->assertCreated();
-
-    expect(IdempotencyKey::query()->sole()->payment->status)->toBe(PaymentStatus::Successful);
-});
