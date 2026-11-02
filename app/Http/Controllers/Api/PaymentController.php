@@ -32,12 +32,18 @@ class PaymentController extends Controller
             method: PaymentMethod::from($request->validated('method')),
         );
 
-        $failed = $payment->status === PaymentStatus::Failed;
-
         return ApiResponse::success(
             data: new PaymentResource($payment),
-            message: $failed ? 'Payment failed.' : 'Payment processed.',
-            status: $failed ? 402 : 201,
+            message: match ($payment->status) {
+                PaymentStatus::Successful => 'Payment processed.',
+                PaymentStatus::Failed => 'Payment failed.',
+                PaymentStatus::Pending => 'Payment outcome not confirmed yet.',
+            },
+            status: match ($payment->status) {
+                PaymentStatus::Successful => 201,
+                PaymentStatus::Failed => 402,
+                PaymentStatus::Pending => 202,
+            },
         );
     }
 

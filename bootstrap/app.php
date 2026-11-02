@@ -4,6 +4,7 @@ use App\Exceptions\Order\InvalidStatusTransitionException;
 use App\Exceptions\Order\OrderHasPaymentsException;
 use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
+use App\Exceptions\Payment\PaymentInProgressException;
 use App\Exceptions\Payment\UnsupportedPaymentMethodException;
 use App\Http\Responses\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
@@ -51,7 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             status: 409,
         ));
 
-        $exceptions->render(fn (OrderNotConfirmedException|OrderAlreadyPaidException $e) => ApiResponse::error(
+        $exceptions->render(fn (OrderNotConfirmedException|OrderAlreadyPaidException|PaymentInProgressException $e) => ApiResponse::error(
             message: $e->getMessage(),
             status: 409,
         ));
