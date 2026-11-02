@@ -55,7 +55,9 @@ while (! file_exists("{$spec['dir']}/go")) {
 }
 
 if ($spec['wait_for_pause'] ?? false) {
-    while (! file_exists("{$spec['dir']}/paused")) {
+    $deadline = microtime(true) + 5;
+
+    while (! file_exists("{$spec['dir']}/paused") && microtime(true) < $deadline) {
         usleep(500);
     }
 }

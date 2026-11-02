@@ -10,7 +10,8 @@ use App\Enums\Payment\PaymentStatus;
 use App\Services\Payment\Contracts\PaymentGatewayContract;
 
 /**
- * Stays inside the gateway long enough for racing requests to overlap.
+ * Stays inside the gateway long enough for racing requests to overlap, and records
+ * the amount it was asked to charge in the reference.
  */
 final class SlowGateway implements PaymentGatewayContract
 {
@@ -18,6 +19,6 @@ final class SlowGateway implements PaymentGatewayContract
     {
         usleep(400_000);
 
-        return new GatewayResult(PaymentStatus::Successful, 'slow_ref', 'Processed by the slow gateway.');
+        return new GatewayResult(PaymentStatus::Successful, "charged_{$data->order->total}", 'Processed by the slow gateway.');
     }
 }

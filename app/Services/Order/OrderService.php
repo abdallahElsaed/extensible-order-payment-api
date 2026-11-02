@@ -50,15 +50,17 @@ class OrderService
 
     public function update(Order $order, UpdateOrderData $data): Order
     {
-        if ($data->status !== null && ! $order->status->canTransitionTo($data->status)) {
-            throw new InvalidStatusTransitionException($order->status, $data->status);
-        }
-
-        if ($data->items !== null && $order->payments()->exists()) {
-            throw new OrderHasPaymentsException('Order has associated payments; items and total cannot be modified.');
-        }
-
         return DB::transaction(function () use ($order, $data): Order {
+            $order = $this->lock($order);
+
+            if ($data->status !== null && ! $order->status->canTransitionTo($data->status)) {
+                throw new InvalidStatusTransitionException($order->status, $data->status);
+            }
+
+            if ($data->items !== null && $order->payments()->exists()) {
+                throw new OrderHasPaymentsException('Order has associated payments; items and total cannot be modified.');
+            }
+
             if ($data->status !== null) {
                 $order->status = $data->status;
             }
@@ -77,11 +79,24 @@ class OrderService
 
     public function delete(Order $order): void
     {
-        if ($order->payments()->exists()) {
-            throw new OrderHasPaymentsException;
-        }
+        DB::transaction(function () use ($order): void {
+            $order = $this->lock($order);
 
-        $order->delete();
+            if ($order->payments()->exists()) {
+                throw new OrderHasPaymentsException;
+            }
+
+            $order->delete();
+        });
+    }
+
+    /**
+     * Payment reservation locks the same row, so the checks made after this call
+     * cannot be invalidated by a payment arriving mid-update.
+     */
+    private function lock(Order $order): Order
+    {
+        return Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
     }
 
     /**
