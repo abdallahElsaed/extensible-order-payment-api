@@ -47,6 +47,13 @@ it('renders minor units back to a decimal string', function (): void {
         ->and(Money::fromMinor(5)->toDecimal())->toBe('0.05');
 });
 
+it('renders amounts above float precision exactly', function (): void {
+    $money = Money::fromMinor(2 ** 53 + 1);
+
+    expect($money->toDecimal())->toBe('90071992547409.93')
+        ->and($money->format())->toBe('90,071,992,547,409.93');
+});
+
 it('adds two money values', function (): void {
     $sum = Money::fromMinor(1999)->add(Money::fromMinor(1));
 

@@ -58,11 +58,13 @@ final readonly class Money
 
     public function toDecimal(): string
     {
-        return number_format($this->minorUnits / 100, 2, '.', '');
+        return sprintf('%d.%02d', intdiv($this->minorUnits, 100), $this->minorUnits % 100);
     }
 
     public function format(): string
     {
-        return number_format($this->minorUnits / 100, 2);
+        $whole = preg_replace('/\B(?=(\d{3})+$)/', ',', (string) intdiv($this->minorUnits, 100));
+
+        return sprintf('%s.%02d', $whole, $this->minorUnits % 100);
     }
 }
