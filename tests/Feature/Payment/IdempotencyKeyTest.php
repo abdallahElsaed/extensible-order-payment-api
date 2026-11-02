@@ -91,6 +91,15 @@ it('rejects the same key with a different body', function (array $body) {
     'an extra field' => [['method' => 'credit_card', 'note' => 'changed']],
 ]);
 
+it('rejects the same key with a different method in a multipart body, which has no raw content', function () {
+    $multipart = fn (string $method) => $this->actingAs($this->user, 'api')
+        ->withHeaders(['Idempotency-Key' => 'key-1', 'Content-Type' => 'multipart/form-data; boundary=x', 'Accept' => 'application/json'])
+        ->post("/api/orders/{$this->order->id}/payments", ['method' => $method]);
+
+    $multipart('credit_card')->assertCreated();
+    $multipart('paypal')->assertStatus(422)->assertJsonValidationErrors('Idempotency-Key');
+});
+
 it('rejects the same key with a different query string, even one that is not valid UTF-8', function () {
     payWithKey('key-1', $this->order)->assertCreated();
 

@@ -57,7 +57,7 @@ class ProcessPaymentRequest extends FormRequest
 
         return new IdempotencyData(
             keyHash: hash('sha256', $key),
-            requestHash: hash('sha256', implode("\n", [$this->path(), $this->getQueryString(), $this->getContent()])),
+            requestHash: hash('sha256', implode("\n", [$this->path(), $this->getQueryString(), $this->validated('method'), $this->getContent()])),
         );
     }
 }
