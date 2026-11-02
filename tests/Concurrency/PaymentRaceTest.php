@@ -118,6 +118,33 @@ it('answers 202 and flags the known result when it cannot be recorded', function
     expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Pending);
 });
 
+it('takes the order lock before recording a late result', function () {
+    Exceptions::fake();
+    Log::shouldReceive('critical')->twice();
+    config(['database.connections.probe' => config('database.connections.mysql')]);
+    useCreditCardGateway(CallbackGateway::class);
+    $rival = DB::connection('probe');
+
+    CallbackGateway::$callback = function () use ($rival): void {
+        Payment::query()->where('order_id', $this->order->id)->update(['status' => PaymentStatus::Failed]);
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $rival->beginTransaction();
+        $rival->table('orders')->where('id', $this->order->id)->lockForUpdate()->get();
+    };
+
+    try {
+        $response = $this->actingAs($this->user, 'api')
+            ->postJson("/api/orders/{$this->order->id}/payments", ['method' => 'credit_card']);
+    } finally {
+        $rival->rollBack();
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 50');
+    }
+
+    $response->assertStatus(409);
+
+    expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
 it('recovers a payment whose process was killed during the gateway call', function () {
     [$crashed] = RequestRace::run([($this->payment)(['gateway' => CrashingGateway::class])]);
 

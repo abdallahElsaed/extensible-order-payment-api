@@ -145,9 +145,9 @@ final class PaymentService
     }
 
     /**
-     * Conditional on pending, so a late gateway result cannot overwrite an expiry.
-     * The result is known at this point, so losing it could lead to a double charge:
-     * failures are retried, then logged with everything needed to settle it by hand.
+     * Conditional on pending, so only the first writer settles the payment. The result
+     * is known at this point, so losing it could lead to a double charge: failures are
+     * retried, then logged with everything needed to settle it by hand.
      */
     private function finalise(Payment $payment, GatewayResult $result): Payment
     {
@@ -160,30 +160,49 @@ final class PaymentService
                     'reference' => $result->reference,
                     'message' => $result->message,
                 ]), 100);
+
+            if ($updated === 0 && $payment->refresh()->status !== PaymentStatus::Pending) {
+                $this->recordLateResult($payment, $result);
+            }
+
+            $payment->refresh();
         } catch (QueryException $exception) {
             report($exception);
             $this->flagForReview('Gateway result could not be recorded.', $payment, $result);
-
-            return $payment;
         }
 
-        $payment->refresh();
-
-        if ($updated === 0 && $result->status !== PaymentStatus::Pending) {
-            $this->flagForReview('Gateway result arrived after the payment was settled.', $payment, $result);
-        }
-
-        if ($payment->status !== $result->status) {
+        if ($payment->status !== PaymentStatus::Pending && $payment->status !== $result->status) {
             throw new PaymentOutcomeConflictException;
         }
 
         return $payment;
     }
 
+    /**
+     * Only expiry settles a payment before finalise does, and expiry was a guess. A
+     * confirmed success replaces it, so reserve() refuses any further charge. The order
+     * lock stops a new reservation slipping past that check while this is written.
+     */
+    private function recordLateResult(Payment $payment, GatewayResult $result): void
+    {
+        $this->flagForReview('Gateway result arrived after the payment expired.', $payment, $result);
+
+        DB::transaction(function () use ($payment, $result): void {
+            Order::query()->whereKey($payment->order_id)->lockForUpdate()->firstOrFail();
+
+            $payment->update([
+                'status' => $result->status === PaymentStatus::Successful ? $result->status : $payment->status,
+                'reference' => $result->reference,
+                'message' => $result->message,
+            ]);
+        });
+    }
+
     private function flagForReview(string $reason, Payment $payment, GatewayResult $result): void
     {
         Log::critical("{$reason} Needs manual review.", [
             'payment' => $payment->uuid,
+            'order' => $payment->order_id,
             'recorded_status' => $payment->status->value,
             'gateway_status' => $result->status->value,
             'gateway_reference' => $result->reference,

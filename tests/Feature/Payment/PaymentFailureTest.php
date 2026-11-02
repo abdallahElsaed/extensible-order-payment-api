@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use App\Services\Payment\PaymentGatewayRegistry;
+use App\Services\Payment\PaymentService;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
@@ -30,6 +31,12 @@ function pay(Order $order, User $user): TestResponse
 {
     return test()->actingAs($user, 'api')
         ->postJson("/api/orders/{$order->id}/payments", ['method' => 'credit_card']);
+}
+
+function expireInFlightPayment(): void
+{
+    test()->travel((int) config('payments.pending_ttl_minutes'))->minutes();
+    app(PaymentService::class)->expireStale();
 }
 
 it('commits a pending record before the gateway runs and calls it outside any transaction', function () {
@@ -99,30 +106,50 @@ it('does not reserve a payment when the method has no gateway', function () {
     expect(Payment::query()->where('order_id', $this->order->id)->exists())->toBeFalse();
 });
 
-it('keeps an expiry over a late success, flags it, and does not tell the client it failed', function () {
+it('records a late success over the expiry and refuses any further charge', function () {
+    Log::spy();
+    $gatewayCalls = 0;
+
+    CallbackGateway::$callback = function () use (&$gatewayCalls): void {
+        $gatewayCalls++;
+        expireInFlightPayment();
+    };
+
+    pay($this->order, $this->user)->assertCreated();
+
+    $payment = Payment::query()->where('order_id', $this->order->id)->sole();
+
+    expect($payment->status)->toBe(PaymentStatus::Successful)
+        ->and($payment->reference)->toBe('callback_ref');
+
+    pay($this->order, $this->user)->assertStatus(409);
+
+    expect($gatewayCalls)->toBe(1)
+        ->and(Payment::query()->where('order_id', $this->order->id)->count())->toBe(1);
+    Log::shouldHaveReceived('critical')->once();
+});
+
+it('keeps an expiry over a late non-success, but saves the reference and flags it', function (PaymentStatus $late, int $status) {
     Exceptions::fake();
-    Log::shouldReceive('critical')->once();
+    Log::spy();
 
-    CallbackGateway::$callback = function (): void {
-        Payment::query()->where('order_id', $this->order->id)->update(['status' => PaymentStatus::Failed]);
+    CallbackGateway::$callback = function () use ($late): GatewayResult {
+        expireInFlightPayment();
+
+        return new GatewayResult($late, 'late_ref', 'Late answer.');
     };
 
-    pay($this->order, $this->user)->assertStatus(409)->assertJson(['success' => false]);
+    pay($this->order, $this->user)->assertStatus($status);
 
-    expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Failed);
-});
+    $payment = Payment::query()->where('order_id', $this->order->id)->sole();
 
-it('flags a late decline too, so its reference is not lost silently', function () {
-    Log::shouldReceive('critical')->once();
-
-    CallbackGateway::$callback = function (): GatewayResult {
-        Payment::query()->where('order_id', $this->order->id)->update(['status' => PaymentStatus::Failed]);
-
-        return new GatewayResult(PaymentStatus::Failed, 'late_ref', 'Declined.');
-    };
-
-    pay($this->order, $this->user)->assertStatus(402);
-});
+    expect($payment->status)->toBe(PaymentStatus::Failed)
+        ->and($payment->reference)->toBe('late_ref');
+    Log::shouldHaveReceived('critical')->once();
+})->with([
+    'a decline' => [PaymentStatus::Failed, 402],
+    'still pending' => [PaymentStatus::Pending, 409],
+]);
 
 it('records the gateway outcome even if the order was cancelled during the call', function () {
     CallbackGateway::$callback = function (): void {
