@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\PaymentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/auth/register', [AuthController::class, 'register']);
+Route::pattern('order', '[0-9]{1,18}');
+
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:register');
 Route::post('/auth/login', [AuthController::class, 'login'])->middleware('throttle:login');
 
 Route::middleware('auth:api')->group(function (): void {
