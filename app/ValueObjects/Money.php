@@ -20,9 +20,25 @@ final readonly class Money
         return new self($minorUnits);
     }
 
+    /**
+     * Parses digits rather than casting to float, so precision is never lost.
+     * A third decimal place rounds half up.
+     */
     public static function fromDecimal(string|float $amount): self
     {
-        return new self((int) round((float) $amount * 100));
+        $decimal = is_float($amount) ? number_format($amount, 2, '.', '') : $amount;
+
+        if (preg_match('/^([+-]?)(?=\.?\d)(\d*)\.?(\d*)$/', $decimal, $parts) !== 1) {
+            throw new InvalidArgumentException("Invalid decimal amount [{$decimal}].");
+        }
+
+        [, $sign, $whole, $fraction] = $parts;
+
+        $minorUnits = (int) $whole * 100
+            + (int) substr(str_pad($fraction, 2, '0'), 0, 2)
+            + ((int) ($fraction[2] ?? 0) >= 5 ? 1 : 0);
+
+        return new self($sign === '-' ? -$minorUnits : $minorUnits);
     }
 
     public function add(self $other): self

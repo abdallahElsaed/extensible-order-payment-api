@@ -19,6 +19,33 @@ it('converts a float into minor units without float drift', function (): void {
         ->and(Money::fromDecimal(19.99)->minorUnits())->toBe(1999);
 });
 
+it('keeps every digit of a decimal string beyond float precision', function (): void {
+    expect(Money::fromDecimal('90071992547409.93')->minorUnits())->toBe(9007199254740993);
+});
+
+it('rounds a third decimal place half up from the digits, not a float', function (string $amount, int $minorUnits): void {
+    expect(Money::fromDecimal($amount)->minorUnits())->toBe($minorUnits);
+})->with([
+    'half rounds up where a float would not' => ['1.005', 101],
+    'below half rounds down' => ['1.004', 100],
+    'carries into the whole part' => ['0.995', 100],
+]);
+
+it('accepts every numeric shape the order validation lets through', function (string $amount, int $minorUnits): void {
+    expect(Money::fromDecimal($amount)->minorUnits())->toBe($minorUnits);
+})->with([
+    'explicit plus' => ['+5', 500],
+    'leading dot' => ['.5', 50],
+    'trailing dot' => ['5.', 500],
+    'zero' => ['0', 0],
+    'negative zero' => ['-0', 0],
+]);
+
+it('rejects a string that is not a plain decimal', function (string $amount): void {
+    Money::fromDecimal($amount);
+})->with(['empty' => '', 'dot only' => '.', 'text' => 'abc', 'exponent' => '1e3', 'comma' => '1,50', 'spaces' => ' 1.50'])
+    ->throws(InvalidArgumentException::class);
+
 it('renders minor units back to a decimal string', function (): void {
     expect(Money::fromMinor(1999)->toDecimal())->toBe('19.99')
         ->and(Money::fromMinor(10000)->toDecimal())->toBe('100.00')
