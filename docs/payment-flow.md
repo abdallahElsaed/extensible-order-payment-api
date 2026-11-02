@@ -107,6 +107,7 @@ someone can refund one.
 | Late success, after expiry | becomes `successful` | 201, logged as critical |
 | Late decline, after expiry | stays `failed`, reference saved | 402, logged as critical |
 | Late `pending`, after expiry | stays `failed`, reference saved | 409, logged as critical |
+| Late result cannot be recorded after 3 attempts | stays as it is | 409 (402 for a decline), logged as critical with the reference |
 
 ## Idempotency
 
@@ -116,9 +117,10 @@ detects reuse, so a retry must resend the same bytes.
 
 - The order lock serialises duplicates on one order. The unique constraint settles one key
   racing across two orders, where each request holds a different lock.
-- A replay renders the stored payment, which does not change once finalised, so no response
-  snapshot is kept. The exception is a replay of a pending payment: it reports the current
-  state, which later becomes the final result.
+- A replay renders the stored payment, so no response snapshot is kept. A finalised payment
+  normally does not change, with two exceptions, and in both a replay reports the current
+  state: a pending payment later becomes its final result, and an expired payment moves from
+  402 to 201 if a late success arrives.
 - A key is consumed only when a payment is reserved. A request refused earlier (409 or 422)
   can be repeated with the same key once the problem is fixed.
 

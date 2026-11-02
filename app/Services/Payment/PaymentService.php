@@ -187,15 +187,15 @@ final class PaymentService
     {
         $this->flagForReview('Gateway result arrived after the payment expired.', $payment, $result);
 
-        DB::transaction(function () use ($payment, $result): void {
+        retry(3, fn () => DB::transaction(function () use ($payment, $result): void {
             Order::query()->whereKey($payment->order_id)->lockForUpdate()->firstOrFail();
 
-            $payment->update([
+            Payment::query()->whereKey($payment->getKey())->update([
                 'status' => $result->status === PaymentStatus::Successful ? $result->status : $payment->status,
                 'reference' => $result->reference,
                 'message' => $result->message,
             ]);
-        });
+        }), 100);
     }
 
     private function flagForReview(string $reason, Payment $payment, GatewayResult $result): void

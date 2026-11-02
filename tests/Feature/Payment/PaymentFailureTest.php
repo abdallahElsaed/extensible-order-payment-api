@@ -10,6 +10,7 @@ use App\Models\Payment;
 use App\Models\User;
 use App\Services\Payment\PaymentGatewayRegistry;
 use App\Services\Payment\PaymentService;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
@@ -37,6 +38,20 @@ function expireInFlightPayment(): void
 {
     test()->travel((int) config('payments.pending_ttl_minutes'))->minutes();
     app(PaymentService::class)->expireStale();
+}
+
+/**
+ * Make the unconditional update of the late write fail, leaving the conditional first write alone.
+ */
+function failLateWrites(int $times): void
+{
+    DB::beforeExecuting(function (string $sql) use (&$times): void {
+        if ($times > 0 && preg_match('/^update `payments`.*`id` = \?$/', $sql) === 1) {
+            $times--;
+
+            throw new QueryException('mysql', $sql, [], new PDOException('Deadlock found'));
+        }
+    });
 }
 
 it('commits a pending record before the gateway runs and calls it outside any transaction', function () {
@@ -127,6 +142,41 @@ it('records a late success over the expiry and refuses any further charge', func
     expect($gatewayCalls)->toBe(1)
         ->and(Payment::query()->where('order_id', $this->order->id)->count())->toBe(1);
     Log::shouldHaveReceived('critical')->once();
+});
+
+it('retries a late write that fails once, ending with the success recorded', function () {
+    Log::spy();
+    failLateWrites(1);
+    CallbackGateway::$callback = fn () => expireInFlightPayment();
+
+    pay($this->order, $this->user)->assertCreated();
+
+    $payment = Payment::query()->where('order_id', $this->order->id)->sole();
+
+    expect($payment->status)->toBe(PaymentStatus::Successful)
+        ->and($payment->reference)->toBe('callback_ref');
+});
+
+it('does not claim success when a late write fails every attempt, and logs the truth', function () {
+    Exceptions::fake();
+    Log::spy();
+    failLateWrites(3);
+    CallbackGateway::$callback = fn () => expireInFlightPayment();
+
+    pay($this->order, $this->user)->assertStatus(409);
+
+    $payment = Payment::query()->where('order_id', $this->order->id)->sole();
+
+    expect($payment->status)->toBe(PaymentStatus::Failed)
+        ->and($payment->reference)->toBeNull()
+        ->and($payment->message)->toContain('never confirmed');
+
+    Log::shouldHaveReceived('critical')
+        ->withArgs(fn (string $message, array $context): bool => str_contains($message, 'could not be recorded')
+            && $context['recorded_status'] === 'failed'
+            && $context['gateway_status'] === 'successful'
+            && $context['gateway_reference'] === 'callback_ref')
+        ->once();
 });
 
 it('keeps an expiry over a late non-success, but saves the reference and flags it', function (PaymentStatus $late, int $status) {
