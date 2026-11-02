@@ -105,12 +105,15 @@ it('answers 202 and flags the known result when it cannot be recorded', function
         $rival->table('payments')->where('order_id', $this->order->id)->lockForUpdate()->get();
     };
 
-    $this->actingAs($this->user, 'api')
-        ->postJson("/api/orders/{$this->order->id}/payments", ['method' => 'credit_card'])
-        ->assertStatus(202);
+    try {
+        $response = $this->actingAs($this->user, 'api')
+            ->postJson("/api/orders/{$this->order->id}/payments", ['method' => 'credit_card']);
+    } finally {
+        $rival->rollBack();
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 50');
+    }
 
-    $rival->rollBack();
-    DB::statement('SET SESSION innodb_lock_wait_timeout = 50');
+    $response->assertStatus(202);
 
     expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Pending);
 });
