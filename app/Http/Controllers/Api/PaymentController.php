@@ -30,6 +30,7 @@ class PaymentController extends Controller
         $payment = $this->payments->process(
             order: $model,
             method: PaymentMethod::from($request->validated('method')),
+            idempotency: $request->idempotency(),
         );
 
         return ApiResponse::success(

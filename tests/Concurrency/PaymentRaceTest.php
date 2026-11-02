@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\Payment\PaymentStatus;
+use App\Models\IdempotencyKey;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
@@ -38,6 +39,34 @@ it('lets one of many concurrent payment requests through and refuses the rest', 
 
     expect($statuses)->toBe([201, 409, 409, 409, 409, 409])
         ->and(Payment::query()->where('order_id', $this->order->id)->count())->toBe(1);
+});
+
+it('turns concurrent duplicates with one key into a single payment', function () {
+    $duplicate = ($this->payment)(['headers' => [...($this->payment)()['headers'], 'Idempotency-Key' => 'race-key']]);
+
+    $responses = collect(RequestRace::run(array_fill(0, 6, $duplicate)));
+
+    $payment = Payment::query()->where('order_id', $this->order->id)->sole();
+
+    expect($responses->pluck('status')->countBy()->get(201))->toBe(1)
+        ->and($responses->pluck('status')->diff([201, 202])->all())->toBe([])
+        ->and($responses->pluck('body.data.id')->unique()->all())->toBe([$payment->uuid])
+        ->and(IdempotencyKey::query()->count())->toBe(1);
+});
+
+it('lets the unique constraint settle one key racing on two orders', function () {
+    $otherOrder = Order::factory()->for($this->user)->confirmed()->create();
+    $headers = [...($this->payment)()['headers'], 'Idempotency-Key' => 'cross-order-key'];
+    $pauseInsideTheWindow = ['headers' => $headers, 'pause_after_query' => 'from `idempotency_keys`'];
+
+    $responses = RequestRace::run([
+        ($this->payment)($pauseInsideTheWindow),
+        ($this->payment)([...$pauseInsideTheWindow, 'uri' => "/api/orders/{$otherOrder->id}/payments"]),
+    ]);
+
+    expect(collect($responses)->pluck('status')->sort()->values()->all())->toBe([201, 422])
+        ->and(Payment::query()->count())->toBe(1)
+        ->and(IdempotencyKey::query()->count())->toBe(1);
 });
 
 it('holds no lock on the order during the gateway call', function () {

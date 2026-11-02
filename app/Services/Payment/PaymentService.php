@@ -5,17 +5,21 @@ declare(strict_types=1);
 namespace App\Services\Payment;
 
 use App\DTOs\Payment\GatewayResult;
+use App\DTOs\Payment\IdempotencyData;
 use App\DTOs\Payment\ProcessPaymentData;
 use App\Enums\Order\OrderStatus;
 use App\Enums\Payment\PaymentMethod;
 use App\Enums\Payment\PaymentStatus;
+use App\Exceptions\Payment\IdempotencyKeyReusedException;
 use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
 use App\Exceptions\Payment\PaymentInProgressException;
+use App\Models\IdempotencyKey;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -28,11 +32,15 @@ final class PaymentService
      * The gateway call sits between two short database steps, so no row lock is
      * held while waiting on a third party. See docs/payment-flow.md.
      */
-    public function process(Order $order, PaymentMethod $method): Payment
+    public function process(Order $order, PaymentMethod $method, ?IdempotencyData $idempotency = null): Payment
     {
-        $payment = DB::transaction(fn (): Payment => $this->reserve($order, $method));
+        try {
+            $payment = DB::transaction(fn (): Payment => $this->reserve($order, $method, $idempotency));
+        } catch (UniqueConstraintViolationException) {
+            throw new IdempotencyKeyReusedException;
+        }
 
-        return $this->charge($payment);
+        return $payment->wasRecentlyCreated ? $this->charge($payment) : $payment;
     }
 
     /**
@@ -55,9 +63,19 @@ final class PaymentService
         return $expired;
     }
 
-    private function reserve(Order $order, PaymentMethod $method): Payment
+    /**
+     * The lock must stay the transaction's first statement: under REPEATABLE READ
+     * an earlier plain read would pin a snapshot that hides a rival's commit.
+     */
+    private function reserve(Order $order, PaymentMethod $method, ?IdempotencyData $idempotency): Payment
     {
         $order = Order::query()->whereKey($order->getKey())->lockForUpdate()->firstOrFail();
+
+        $replayed = $idempotency !== null ? $this->findReplayed($order, $idempotency) : null;
+
+        if ($replayed !== null) {
+            return $replayed;
+        }
 
         if ($order->status !== OrderStatus::Confirmed) {
             throw new OrderNotConfirmedException;
@@ -73,9 +91,36 @@ final class PaymentService
 
         $this->registry->resolve($method);
 
-        return $order->payments()
-            ->create(['method' => $method, 'status' => PaymentStatus::Pending])
-            ->setRelation('order', $order);
+        $payment = $order->payments()->create(['method' => $method, 'status' => PaymentStatus::Pending]);
+
+        if ($idempotency !== null) {
+            IdempotencyKey::query()->create([
+                'user_id' => $order->user_id,
+                'key' => $idempotency->key,
+                'request_hash' => $idempotency->requestHash,
+                'payment_id' => $payment->id,
+            ]);
+        }
+
+        return $payment->setRelation('order', $order);
+    }
+
+    private function findReplayed(Order $order, IdempotencyData $idempotency): ?Payment
+    {
+        $record = IdempotencyKey::query()
+            ->where('user_id', $order->user_id)
+            ->where('key', $idempotency->key)
+            ->first();
+
+        if ($record === null) {
+            return null;
+        }
+
+        if (! hash_equals($record->request_hash, $idempotency->requestHash)) {
+            throw new IdempotencyKeyReusedException;
+        }
+
+        return $record->payment;
     }
 
     /**

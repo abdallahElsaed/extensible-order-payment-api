@@ -2,6 +2,7 @@
 
 use App\Exceptions\Order\InvalidStatusTransitionException;
 use App\Exceptions\Order\OrderHasPaymentsException;
+use App\Exceptions\Payment\IdempotencyKeyReusedException;
 use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
 use App\Exceptions\Payment\PaymentInProgressException;
@@ -55,6 +56,12 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(fn (OrderNotConfirmedException|OrderAlreadyPaidException|PaymentInProgressException $e) => ApiResponse::error(
             message: $e->getMessage(),
             status: 409,
+        ));
+
+        $exceptions->render(fn (IdempotencyKeyReusedException $e) => ApiResponse::error(
+            message: $e->getMessage(),
+            errors: ['Idempotency-Key' => [$e->getMessage()]],
+            status: 422,
         ));
 
         $exceptions->render(fn (UnsupportedPaymentMethodException $e) => ApiResponse::error(
