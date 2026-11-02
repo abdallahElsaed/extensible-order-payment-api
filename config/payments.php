@@ -34,7 +34,9 @@ return [
     |
     */
 
-    'pending_ttl_minutes' => max(1, (int) (env('PAYMENT_PENDING_TTL_MINUTES') ?: 15)),
+    'pending_ttl_minutes' => filter_var(env('PAYMENT_PENDING_TTL_MINUTES'), FILTER_VALIDATE_INT, [
+        'options' => ['default' => 15, 'min_range' => 1],
+    ]),
 
     /*
     |--------------------------------------------------------------------------
