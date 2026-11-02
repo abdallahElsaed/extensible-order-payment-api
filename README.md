@@ -13,7 +13,7 @@ can be added without modifying any existing gateway or the core payment flow.
 
 ## Requirements
 
-- PHP 8.4, the version CI runs (Laravel Herd recommended). `composer.json` allows `^8.3`.
+- PHP 8.4 (Laravel Herd recommended)
 - Composer
 - MySQL with databases named `order_payment_api` and `order_payment_api_test`
 
