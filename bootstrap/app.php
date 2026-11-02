@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -47,6 +48,11 @@ return Application::configure(basePath: dirname(__DIR__))
             message: 'Resource not found.',
             status: 404,
         ));
+
+        $exceptions->render(fn (ThrottleRequestsException $e) => ApiResponse::error(
+            message: 'Too many attempts. Try again later.',
+            status: 429,
+        )->withHeaders($e->getHeaders()));
 
         $exceptions->render(fn (OrderHasPaymentsException|InvalidStatusTransitionException $e) => ApiResponse::error(
             message: $e->getMessage(),
