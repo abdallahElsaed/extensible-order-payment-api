@@ -13,7 +13,7 @@ can be added without modifying any existing gateway or the core payment flow.
 
 ## Requirements
 
-- PHP 8.4 (Laravel Herd recommended)
+- PHP 8.4, the version CI runs (Laravel Herd recommended). `composer.json` allows `^8.3`.
 - Composer
 - MySQL with databases named `order_payment_api` and `order_payment_api_test`
 
@@ -61,6 +61,7 @@ Every response is wrapped in a consistent envelope:
 ```
 
 - `2xx` → `success: true`, payload in `data`.
+- `402` declined payment → `success: true`, with the failed payment in `data`.
 - `422` validation → `success: false`, field errors in `errors`.
 - `401` / `404` / `409` / `429` → `success: false` with a `message`.
 - Paginated lists also include `links` and `meta`.
@@ -77,12 +78,12 @@ Authenticated routes require an `Authorization: Bearer <token>` header.
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
 | POST | `/api/auth/register` | no | Register, returns `{ user, token }` |
-| POST | `/api/auth/login` | no | Login, returns `{ user, token }`. Limited to 5 attempts a minute per email and IP |
+| POST | `/api/auth/login` | no | Login, returns `{ user, token }`. Limited to 5 attempts a minute per email and IP, and 30 per IP |
 | GET | `/api/user` | yes | Current user |
 | GET | `/api/orders` | yes | List own orders (`?status=`, paginated) |
 | POST | `/api/orders` | yes | Create an order with line items |
 | GET | `/api/orders/{order}` | yes | Show an order |
-| PATCH | `/api/orders/{order}` | yes | Update status and/or items (items are blocked if payments exist) |
+| PATCH, PUT | `/api/orders/{order}` | yes | Update status and/or items (items are blocked if payments exist) |
 | DELETE | `/api/orders/{order}` | yes | Delete (blocked if payments exist) |
 | POST | `/api/orders/{order}/payments` | yes | Process a payment on a confirmed order |
 | GET | `/api/orders/{order}/payments` | yes | List payments for an order |
@@ -112,7 +113,7 @@ The gateway is called outside any transaction, so a slow provider never holds a 
 | `201` | Payment successful |
 | `202` | Outcome unknown (gateway error or timeout). The payment stays `pending`; check `GET /api/payments/{payment}` |
 | `402` | Payment failed or declined |
-| `409` | Order not confirmed, already paid, or another payment is in progress |
+| `409` | Order not confirmed, already paid, another payment in progress, or a late gateway result needs manual review |
 | `422` | Invalid method or `Idempotency-Key`, or the key was used with a different request |
 
 Send an optional `Idempotency-Key` header (1 to 255 visible ASCII characters) to retry

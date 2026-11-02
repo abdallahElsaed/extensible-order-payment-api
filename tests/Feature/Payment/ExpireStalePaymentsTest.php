@@ -51,8 +51,8 @@ it('frees the order for a new attempt once the stuck payment expires', function 
         ->assertCreated();
 });
 
-it('is scheduled', function () {
+it('is scheduled every five minutes', function () {
     Artisan::call('schedule:list');
 
-    expect(Artisan::output())->toContain('payments:expire-stale');
+    expect(Artisan::output())->toMatch('/\*\/5 \* \* \* \*.*payments:expire-stale/');
 });

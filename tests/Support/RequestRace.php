@@ -21,7 +21,7 @@ final class RequestRace
 
     /**
      * @param  list<array<string, mixed>>  $requests
-     * @return list<array{status: int|null, body: array<string, mixed>|null}> status is null when the worker died
+     * @return list<array{status: int|null, body: array<string, mixed>|null}> status is null when the worker was killed
      */
     public static function run(array $requests): array
     {
@@ -89,6 +89,7 @@ final class RequestRace
             return ['status' => null, 'body' => null];
         }
 
-        return json_decode($worker->getOutput(), true) ?? ['status' => null, 'body' => null];
+        return json_decode($worker->getOutput(), true)
+            ?? throw new RuntimeException("Race worker failed.\n{$worker->getErrorOutput()}{$worker->getOutput()}");
     }
 }

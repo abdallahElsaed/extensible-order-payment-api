@@ -85,12 +85,16 @@ before failing a payment. The TTL must also exceed the gateway's longest possibl
 | Another attempt while pending | unchanged | 409 |
 | Replay, same key and request | unchanged | the payment's current result |
 | Same key, different request | unchanged | 422 |
-| Gateway answers after expiry | stays `failed` | 402, logged as critical for manual review |
+| Gateway answers `pending` | `pending` | 202 |
+| Successful result cannot be saved | stays `pending` after 3 attempts | 202, logged as critical with the reference |
+| Late success, after expiry | stays `failed` | 409, logged as critical for manual review |
+| Late decline, after expiry | stays `failed` | 402, logged as critical |
 
 ## Idempotency
 
 `Idempotency-Key` is optional. Keys are stored as SHA-256 hashes under
-`UNIQUE(user_id, key_hash)`, with a hash of the path and body to detect reuse.
+`UNIQUE(user_id, key_hash)`. A hash of the raw path, query string and body detects reuse,
+so a retry must resend the same bytes.
 
 - The order lock serialises duplicates on one order. The unique constraint settles one key
   racing across two orders, where each request holds a different lock.
@@ -110,9 +114,15 @@ before failing a payment. The TTL must also exceed the gateway's longest possibl
 
 ## Known limitations
 
-- Cancelling a paid order issues no refund, and an order can be cancelled during a charge.
-  In both cases the payment records what the gateway did. This matches the previous
-  behaviour; there is no refund flow.
+- Cancelling a paid order issues no refund. An order can also now be cancelled during a
+  charge, where cancelling used to wait for the lock, so a charge can complete on an
+  already-cancelled order. The end state is the same as paying and then cancelling, and the
+  payment records what the gateway did, but there is no refund flow for either.
+- A gateway exception raised before the provider is reached, such as a bad
+  `CREDIT_CARD_OUTCOME`, looks like a timeout: the payment stays pending until it expires.
+  This errs on the side of never reporting a failure that may be false.
+- After a late success, a replay reports the stored `failed` result until someone settles it.
+- A payment the expiry marks `failed` cannot be retried with the same key: a retry needs a new one.
 - A gateway that answers `pending` for a truly asynchronous payment has no webhook to
   complete it, so the payment expires.
 - Idempotency keys are never pruned.

@@ -38,7 +38,7 @@ it('parses a decimal string from its digits', function (string $amount, int $min
 
 it('rejects a string that is not a plain decimal', function (string $amount): void {
     Money::fromDecimal($amount);
-})->with(['empty' => '', 'dot only' => '.', 'text' => 'abc', 'exponent' => '1e3', 'comma' => '1,50', 'spaces' => ' 1.50'])
+})->with(['empty' => '', 'dot only' => '.', 'text' => 'abc', 'exponent' => '1e3', 'comma' => '1,50', 'spaces' => ' 1.50', 'trailing newline' => "1.50\n"])
     ->throws(InvalidArgumentException::class);
 
 it('renders minor units back to a decimal string', function (): void {

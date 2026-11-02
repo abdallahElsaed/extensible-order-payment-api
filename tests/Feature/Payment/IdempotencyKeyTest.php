@@ -91,12 +91,12 @@ it('rejects the same key with a different body', function (array $body) {
     'an extra field' => [['method' => 'credit_card', 'note' => 'changed']],
 ]);
 
-it('treats a reordered body as the same request', function () {
-    payWithKey('key-1', $this->order, ['method' => 'credit_card', 'note' => 'a'])->assertCreated();
+it('rejects the same key with a different query string, even one that is not valid UTF-8', function () {
+    payWithKey('key-1', $this->order)->assertCreated();
 
-    payWithKey('key-1', $this->order, ['note' => 'a', 'method' => 'credit_card'])->assertCreated();
-
-    expect($this->gatewayCalls)->toBe(1);
+    $this->withHeader('Idempotency-Key', 'key-1')
+        ->postJson("/api/orders/{$this->order->id}/payments?x=%FF", ['method' => 'credit_card'])
+        ->assertStatus(422);
 });
 
 it('rejects the same key on a different order', function () {
@@ -116,6 +116,13 @@ it('scopes keys to the user', function () {
     payWithKey('key-1', $otherOrder, user: $otherUser)->assertCreated();
 
     expect($this->gatewayCalls)->toBe(2);
+});
+
+it('does not let another user replay a key on an order they do not own', function () {
+    $intruder = User::factory()->create();
+
+    payWithKey('key-1', $this->order)->assertCreated();
+    payWithKey('key-1', $this->order, user: $intruder)->assertNotFound();
 });
 
 it('treats keys differing only by case as different keys', function () {

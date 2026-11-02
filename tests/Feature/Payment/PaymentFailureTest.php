@@ -99,14 +99,29 @@ it('does not reserve a payment when the method has no gateway', function () {
     expect(Payment::query()->where('order_id', $this->order->id)->exists())->toBeFalse();
 });
 
-it('does not let a late gateway result overwrite a settled payment, and flags it', function () {
+it('keeps an expiry over a late success, flags it, and does not tell the client it failed', function () {
+    Exceptions::fake();
     Log::shouldReceive('critical')->once();
 
     CallbackGateway::$callback = function (): void {
         Payment::query()->where('order_id', $this->order->id)->update(['status' => PaymentStatus::Failed]);
     };
 
-    pay($this->order, $this->user)->assertStatus(402)->assertJson(['data' => ['status' => 'failed']]);
+    pay($this->order, $this->user)->assertStatus(409)->assertJson(['success' => false]);
+
+    expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Failed);
+});
+
+it('flags a late decline too, so its reference is not lost silently', function () {
+    Log::shouldReceive('critical')->once();
+
+    CallbackGateway::$callback = function (): GatewayResult {
+        Payment::query()->where('order_id', $this->order->id)->update(['status' => PaymentStatus::Failed]);
+
+        return new GatewayResult(PaymentStatus::Failed, 'late_ref', 'Declined.');
+    };
+
+    pay($this->order, $this->user)->assertStatus(402);
 });
 
 it('records the gateway outcome even if the order was cancelled during the call', function () {

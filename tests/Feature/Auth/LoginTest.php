@@ -112,6 +112,14 @@ it('does not throttle a different email from the same IP', function () {
     $this->postJson('/api/auth/login', ['email' => 'john@example.com', 'password' => 'x'])->assertStatus(401);
 });
 
+it('limits one IP trying many emails', function () {
+    foreach (range(1, 30) as $attempt) {
+        $this->postJson('/api/auth/login', ['email' => "user{$attempt}@example.com", 'password' => 'x'])->assertStatus(401);
+    }
+
+    $this->postJson('/api/auth/login', ['email' => 'another@example.com', 'password' => 'x'])->assertStatus(429);
+});
+
 it('answers 422 when the email is not a string, before the limiter can fail', function () {
     $this->postJson('/api/auth/login', ['email' => ['jane@example.com'], 'password' => 'x'])
         ->assertStatus(422)

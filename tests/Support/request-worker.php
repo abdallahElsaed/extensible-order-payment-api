@@ -43,7 +43,11 @@ if (isset($spec['pause_after_query'])) {
         if (! $paused && str_contains($query->sql, $spec['pause_after_query'])) {
             $paused = true;
             touch("{$spec['dir']}/paused");
-            usleep(800_000);
+            $resumeAt = microtime(true) + ($spec['pause_seconds'] ?? 0.8);
+
+            while (! file_exists("{$spec['dir']}/finished") && microtime(true) < $resumeAt) {
+                usleep(500);
+            }
         }
     });
 }
@@ -57,7 +61,12 @@ while (! file_exists("{$spec['dir']}/go")) {
 if ($spec['wait_for_pause'] ?? false) {
     $deadline = microtime(true) + 5;
 
-    while (! file_exists("{$spec['dir']}/paused") && microtime(true) < $deadline) {
+    while (! file_exists("{$spec['dir']}/paused")) {
+        if (microtime(true) > $deadline) {
+            fwrite(STDERR, 'The rival request never reached its pause point.');
+            exit(1);
+        }
+
         usleep(500);
     }
 }
@@ -74,5 +83,7 @@ $response = $kernel->handle(Request::create(
     server: $server,
     content: json_encode($spec['body'] ?? [], JSON_THROW_ON_ERROR),
 ));
+
+touch("{$spec['dir']}/finished");
 
 echo json_encode(['status' => $response->getStatusCode(), 'body' => json_decode($response->getContent(), true)]);

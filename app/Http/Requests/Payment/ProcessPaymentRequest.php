@@ -10,7 +10,6 @@ use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Rule;
 
 class ProcessPaymentRequest extends FormRequest
@@ -58,7 +57,7 @@ class ProcessPaymentRequest extends FormRequest
 
         return new IdempotencyData(
             keyHash: hash('sha256', $key),
-            requestHash: hash('sha256', json_encode([$this->path(), Arr::sortRecursive($this->input())], JSON_THROW_ON_ERROR)),
+            requestHash: hash('sha256', implode("\n", [$this->path(), $this->getQueryString(), $this->getContent()])),
         );
     }
 }

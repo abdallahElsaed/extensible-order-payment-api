@@ -14,11 +14,13 @@ use App\Exceptions\Payment\IdempotencyKeyReusedException;
 use App\Exceptions\Payment\OrderAlreadyPaidException;
 use App\Exceptions\Payment\OrderNotConfirmedException;
 use App\Exceptions\Payment\PaymentInProgressException;
+use App\Exceptions\Payment\PaymentOutcomeConflictException;
 use App\Models\IdempotencyKey;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,7 +52,7 @@ final class PaymentService
     {
         $expired = Payment::query()
             ->where('status', PaymentStatus::Pending)
-            ->where('created_at', '<=', now()->subMinutes((int) config('payments.pending_ttl_minutes')))
+            ->where('created_at', '<=', now()->subMinutes(config('payments.pending_ttl_minutes')))
             ->update([
                 'status' => PaymentStatus::Failed,
                 'message' => 'Expired: the gateway outcome was never confirmed.',
@@ -126,6 +128,7 @@ final class PaymentService
     /**
      * Any exception means the outcome is unknown: a timeout may still have moved
      * money, so the payment stays pending instead of being reported as failed.
+     * That includes failures before the provider was reached, which look the same here.
      */
     private function charge(Payment $payment): Payment
     {
@@ -143,30 +146,48 @@ final class PaymentService
 
     /**
      * Conditional on pending, so a late gateway result cannot overwrite an expiry.
+     * The result is known at this point, so losing it could lead to a double charge:
+     * failures are retried, then logged with everything needed to settle it by hand.
      */
     private function finalise(Payment $payment, GatewayResult $result): Payment
     {
-        Payment::query()
-            ->whereKey($payment->getKey())
-            ->where('status', PaymentStatus::Pending)
-            ->update([
-                'status' => $result->status,
-                'reference' => $result->reference,
-                'message' => $result->message,
-            ]);
+        try {
+            $updated = retry(3, fn (): int => Payment::query()
+                ->whereKey($payment->getKey())
+                ->where('status', PaymentStatus::Pending)
+                ->update([
+                    'status' => $result->status,
+                    'reference' => $result->reference,
+                    'message' => $result->message,
+                ]), 100);
+        } catch (QueryException $exception) {
+            report($exception);
+            $this->flagForReview('Gateway result could not be recorded.', $payment, $result);
+
+            return $payment;
+        }
 
         $payment->refresh();
 
+        if ($updated === 0 && $result->status !== PaymentStatus::Pending) {
+            $this->flagForReview('Gateway result arrived after the payment was settled.', $payment, $result);
+        }
+
         if ($payment->status !== $result->status) {
-            Log::critical('Gateway result arrived after the payment was settled; needs manual review.', [
-                'payment' => $payment->uuid,
-                'recorded_status' => $payment->status->value,
-                'gateway_status' => $result->status->value,
-                'gateway_reference' => $result->reference,
-            ]);
+            throw new PaymentOutcomeConflictException;
         }
 
         return $payment;
+    }
+
+    private function flagForReview(string $reason, Payment $payment, GatewayResult $result): void
+    {
+        Log::critical("{$reason} Needs manual review.", [
+            'payment' => $payment->uuid,
+            'recorded_status' => $payment->status->value,
+            'gateway_status' => $result->status->value,
+            'gateway_reference' => $result->reference,
+        ]);
     }
 
     public function paginateForOrder(Order $order, int $perPage): LengthAwarePaginator

@@ -64,7 +64,7 @@ it('checks a status transition against the locked row, not a stale read', functi
 
     [$cancel, $confirm] = RequestRace::run([
         [...$patch, 'body' => ['status' => 'cancelled'], 'wait_for_pause' => true],
-        [...$patch, 'body' => ['status' => 'confirmed'], 'pause_after_query' => 'from `orders`'],
+        [...$patch, 'body' => ['status' => 'confirmed'], 'pause_after_query' => 'from `orders`', 'pause_seconds' => 10],
     ]);
 
     expect($cancel['status'])->toBe(200)

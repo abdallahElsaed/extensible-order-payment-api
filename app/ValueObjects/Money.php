@@ -28,7 +28,7 @@ final readonly class Money
     {
         $decimal = is_float($amount) ? number_format($amount, 2, '.', '') : $amount;
 
-        if (preg_match('/^([+-]?)(?=\.?\d)(\d*)\.?(\d*)$/', $decimal, $parts) !== 1) {
+        if (preg_match('/^([+-]?)(?=\.?\d)(\d*)\.?(\d*)$/D', $decimal, $parts) !== 1) {
             throw new InvalidArgumentException("Invalid decimal amount [{$decimal}].");
         }
 

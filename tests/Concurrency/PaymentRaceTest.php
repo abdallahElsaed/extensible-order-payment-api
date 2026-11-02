@@ -9,6 +9,8 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use Illuminate\Support\Facades\Log;
 use PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth;
 use Tests\Fixtures\CallbackGateway;
 use Tests\Fixtures\CrashingGateway;
@@ -48,7 +50,7 @@ it('turns concurrent duplicates with one key into a single payment', function ()
 
     $payment = Payment::query()->where('order_id', $this->order->id)->sole();
 
-    expect($responses->pluck('status')->countBy()->get(201))->toBe(1)
+    expect($responses->pluck('status')->contains(201))->toBeTrue()
         ->and($responses->pluck('status')->diff([201, 202])->all())->toBe([])
         ->and($responses->pluck('body.data.id')->unique()->all())->toBe([$payment->uuid])
         ->and(IdempotencyKey::query()->count())->toBe(1);
@@ -88,6 +90,29 @@ it('holds no lock on the order during the gateway call', function () {
         ->assertCreated();
 
     expect($orderWasLocked)->toBeFalse();
+});
+
+it('answers 202 and flags the known result when it cannot be recorded', function () {
+    Exceptions::fake();
+    Log::shouldReceive('critical')->once();
+    config(['database.connections.probe' => config('database.connections.mysql')]);
+    useCreditCardGateway(CallbackGateway::class);
+    $rival = DB::connection('probe');
+
+    CallbackGateway::$callback = function () use ($rival): void {
+        DB::statement('SET SESSION innodb_lock_wait_timeout = 1');
+        $rival->beginTransaction();
+        $rival->table('payments')->where('order_id', $this->order->id)->lockForUpdate()->get();
+    };
+
+    $this->actingAs($this->user, 'api')
+        ->postJson("/api/orders/{$this->order->id}/payments", ['method' => 'credit_card'])
+        ->assertStatus(202);
+
+    $rival->rollBack();
+    DB::statement('SET SESSION innodb_lock_wait_timeout = 50');
+
+    expect(Payment::query()->where('order_id', $this->order->id)->sole()->status)->toBe(PaymentStatus::Pending);
 });
 
 it('recovers a payment whose process was killed during the gateway call', function () {

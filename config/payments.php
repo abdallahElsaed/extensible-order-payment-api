@@ -34,7 +34,7 @@ return [
     |
     */
 
-    'pending_ttl_minutes' => env('PAYMENT_PENDING_TTL_MINUTES', 15),
+    'pending_ttl_minutes' => max(1, (int) (env('PAYMENT_PENDING_TTL_MINUTES') ?: 15)),
 
     /*
     |--------------------------------------------------------------------------
