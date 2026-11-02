@@ -33,7 +33,9 @@ Served by Herd at `http://extensible-order-payment-api.test`. All endpoints are
 prefixed with `/api`.
 
 Run `php artisan schedule:run` every minute in production. It expires payments stuck in
-`pending` (see [the payment flow decision](docs/payment-flow.md)).
+`pending` (see [the payment flow decision](docs/payment-flow.md)). `APP_DEBUG` must be
+`false` in production. No trusted proxies are configured, so behind a load balancer all
+callers would share one IP and therefore the rate limits.
 
 ## Running tests
 
@@ -77,7 +79,7 @@ Authenticated routes require an `Authorization: Bearer <token>` header.
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| POST | `/api/auth/register` | no | Register, returns `{ user, token }` |
+| POST | `/api/auth/register` | no | Register, returns `{ user, token }`. Limited to 10 a minute per IP |
 | POST | `/api/auth/login` | no | Login, returns `{ user, token }`. Limited to 5 attempts a minute per email and IP, and 30 per IP |
 | GET | `/api/user` | yes | Current user |
 | GET | `/api/orders` | yes | List own orders (`?status=`, paginated) |
@@ -113,7 +115,7 @@ The gateway is called outside any transaction, so a slow provider never holds a 
 | `201` | Payment successful |
 | `202` | Outcome unknown (gateway error or timeout). The payment stays `pending`; check `GET /api/payments/{payment}` |
 | `402` | Payment failed or declined |
-| `409` | Order not confirmed, already paid, another payment in progress, or a late gateway result needs manual review |
+| `409` | Order not confirmed, already paid, another payment in progress, or a late unconfirmed gateway answer needs manual review |
 | `422` | Invalid method or `Idempotency-Key`, or the key was used with a different request |
 
 Send an optional `Idempotency-Key` header (1 to 255 visible ASCII characters) to retry

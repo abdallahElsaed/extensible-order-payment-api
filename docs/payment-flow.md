@@ -72,7 +72,24 @@ again. An order can stay blocked for up to the TTL plus five minutes. Production
 
 **Before using a real gateway:** expiry assumes no money moved, which is only safe because
 the gateways are simulated. A real gateway needs a status lookup, and expiry must ask it
-before failing a payment. The TTL must also exceed the gateway's longest possible call.
+before failing a payment. Send the payment UUID as the provider's idempotency key, so a
+repeated call cannot charge twice. The TTL must also exceed the gateway's longest possible
+call.
+
+## When the gateway answers after expiry
+
+Expiry is a guess, and a late answer is a fact. Each payment is finalised once, so a row
+that is no longer pending can only have been expired.
+
+- A late success replaces the `failed` status and saves the reference. The order then
+  counts as paid, so `reserve()` refuses any further charge. The write takes the order lock,
+  so a new reservation cannot slip past that check.
+- A late decline or `pending` answer keeps `failed` and saves the reference.
+- Every late result is logged as critical for manual review.
+
+A retry that started after expiry and before the late answer is a real second charge, which
+no code can undo. Both payments are recorded and the log entry identifies the order, so
+someone can refund one.
 
 ## Outcomes
 
@@ -87,14 +104,15 @@ before failing a payment. The TTL must also exceed the gateway's longest possibl
 | Same key, different request | unchanged | 422 |
 | Gateway answers `pending` | `pending` | 202 |
 | Successful result cannot be saved | stays `pending` after 3 attempts | 202, logged as critical with the reference |
-| Late success, after expiry | stays `failed` | 409, logged as critical for manual review |
-| Late decline, after expiry | stays `failed` | 402, logged as critical |
+| Late success, after expiry | becomes `successful` | 201, logged as critical |
+| Late decline, after expiry | stays `failed`, reference saved | 402, logged as critical |
+| Late `pending`, after expiry | stays `failed`, reference saved | 409, logged as critical |
 
 ## Idempotency
 
 `Idempotency-Key` is optional. Keys are stored as SHA-256 hashes under
-`UNIQUE(user_id, key_hash)`. A hash of the raw path, query string and body detects reuse,
-so a retry must resend the same bytes.
+`UNIQUE(user_id, key_hash)`. A hash of the path, query string, validated method and raw body
+detects reuse, so a retry must resend the same bytes.
 
 - The order lock serialises duplicates on one order. The unique constraint settles one key
   racing across two orders, where each request holds a different lock.
@@ -121,8 +139,9 @@ so a retry must resend the same bytes.
 - A gateway exception raised before the provider is reached, such as a bad
   `CREDIT_CARD_OUTCOME`, looks like a timeout: the payment stays pending until it expires.
   This errs on the side of never reporting a failure that may be false.
-- After a late success, a replay reports the stored `failed` result until someone settles it.
 - A payment the expiry marks `failed` cannot be retried with the same key: a retry needs a new one.
 - A gateway that answers `pending` for a truly asynchronous payment has no webhook to
   complete it, so the payment expires.
 - Idempotency keys are never pruned.
+- No trusted proxies are configured, so behind a load balancer all callers would share one
+  IP and therefore the login and register limits.
