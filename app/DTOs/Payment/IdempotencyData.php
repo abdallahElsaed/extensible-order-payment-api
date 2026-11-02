@@ -7,7 +7,7 @@ namespace App\DTOs\Payment;
 final readonly class IdempotencyData
 {
     public function __construct(
-        public string $key,
+        public string $keyHash,
         public string $requestHash,
     ) {}
 }

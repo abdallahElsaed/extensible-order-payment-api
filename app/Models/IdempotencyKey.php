@@ -13,11 +13,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 /**
  * @property int $id
  * @property int $user_id
- * @property string $key
+ * @property string $key_hash
  * @property string $request_hash
  * @property int $payment_id
  */
-#[Fillable(['user_id', 'key', 'request_hash', 'payment_id'])]
+#[Fillable(['user_id', 'key_hash', 'request_hash', 'payment_id'])]
 class IdempotencyKey extends Model
 {
     /** @use HasFactory<IdempotencyKeyFactory> */

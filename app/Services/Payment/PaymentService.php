@@ -96,7 +96,7 @@ final class PaymentService
         if ($idempotency !== null) {
             IdempotencyKey::query()->create([
                 'user_id' => $order->user_id,
-                'key' => $idempotency->key,
+                'key_hash' => $idempotency->keyHash,
                 'request_hash' => $idempotency->requestHash,
                 'payment_id' => $payment->id,
             ]);
@@ -109,7 +109,7 @@ final class PaymentService
     {
         $record = IdempotencyKey::query()
             ->where('user_id', $order->user_id)
-            ->where('key', $idempotency->key)
+            ->where('key_hash', $idempotency->keyHash)
             ->first();
 
         if ($record === null) {

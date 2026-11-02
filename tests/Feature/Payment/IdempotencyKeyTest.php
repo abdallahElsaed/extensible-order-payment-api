@@ -156,7 +156,7 @@ it('accepts a key of the maximum length', function () {
 it('enforces key uniqueness per user in the database itself', function () {
     $existing = IdempotencyKey::factory()->create();
 
-    IdempotencyKey::factory()->create(['user_id' => $existing->user_id, 'key' => $existing->key]);
+    IdempotencyKey::factory()->create(['user_id' => $existing->user_id, 'key_hash' => $existing->key_hash]);
 })->throws(UniqueConstraintViolationException::class);
 
 it('stores the first payment against the key', function () {

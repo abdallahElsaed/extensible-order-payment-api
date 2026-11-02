@@ -57,7 +57,7 @@ class ProcessPaymentRequest extends FormRequest
         }
 
         return new IdempotencyData(
-            key: $key,
+            keyHash: hash('sha256', $key),
             requestHash: hash('sha256', json_encode([$this->path(), Arr::sortRecursive($this->input())], JSON_THROW_ON_ERROR)),
         );
     }

@@ -21,7 +21,7 @@ class IdempotencyKeyFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'key' => fake()->uuid(),
+            'key_hash' => hash('sha256', fake()->uuid()),
             'request_hash' => hash('sha256', fake()->uuid()),
             'payment_id' => Payment::factory(),
         ];
